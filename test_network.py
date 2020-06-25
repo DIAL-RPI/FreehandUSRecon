@@ -44,9 +44,10 @@ mask_img = cv2.imread('data/US_mask.png', 0)
 # frames_folder = '/zion/guoh9/US_recon/US_vid_frames'
 # pos_folder = '/zion/guoh9/US_recon/US_vid_pos'
 
-frames_folder = 'data/US_vid_frames'
-pos_folder = 'data/US_vid_pos'
-cali_folder = 'data/US_cali_mats'
+# frames_folder = 'data/US_vid_frames'
+# pos_folder = 'data/US_vid_pos'
+# cali_folder = 'data/US_cali_mats'
+data_folder = 'data'
 
 
 def read_aurora(file_path):
@@ -484,23 +485,23 @@ def center_crop(input_img, crop_size=480):
 class TestNetwork():
     def __init__(self, case_id):
         super(TestNetwork, self).__init__()
-        self.case_id = case_id
-        if 1 <= self.case_id <= 71:
-            self.data_part = 'test'
-        elif 71 < self.case_id <= 140:
-            self.data_part = 'val'
-        elif 140 < self.case_id <= 747:
-            self.data_part = 'train'
-        self.case_frames_path = path.join(frames_folder, self.data_part,
-                                          'Case{:04}'.format(case_id))
-        self.frames_list = os.listdir(self.case_frames_path)
-        self.frames_list.sort()
+        if isinstance(case_id, int) or isinstance(case_id, float):
+            self.case_name = 'Case{:04}'.format(case_id)
+        else:
+            self.case_name = case_id
 
-        self.cam_cali_mat_path = path.join(cali_folder, 'Case{:04}_USCalib.txt'.format(case_id, case_id))
+        self.case_folder = path.join(data_folder, self.case_name)
+
+        """ Instead of loading frames JPEG, here load the entire npy file """
+        self.case_frames_npy_path = path.join(self.case_folder, '{}_frames.npy'.format(self.case_name))
+        self.case_frames_npy = np.load(self.case_frames_npy_path)
+        # print('case_frames_npy shape {}'.format(self.case_frames_npy.shape))
+
+        self.cam_cali_mat_path = path.join(self.case_folder, '{}_USCalib.txt'.format(self.case_name))
         self.cam_cali_mat = np.loadtxt(self.cam_cali_mat_path)
 
-        case_pos_path = path.join(pos_folder, 'Case{:04}.txt'.format(case_id))
-        self.case_pos = np.loadtxt(case_pos_path)
+        self.case_pos_path = path.join(self.case_folder, '{}_pos.txt'.format(self.case_name))
+        self.case_pos = np.loadtxt(self.case_pos_path)
 
         # self.case_pos = self.case_pos[:10, :]
 
@@ -512,8 +513,6 @@ class TestNetwork():
         #     self.slice_ids = np.linspace(0, self.case_pos.shape[0]-1, self.case_pos.shape[0]).astype(np.uint64)
         self.slice_ids = np.linspace(0, self.case_pos.shape[0]-1, self.case_pos.shape[0]).astype(np.uint64)
         # print(self.slice_ids)
-
-        print('frames_list {}, case_pos {}'.format(len(self.frames_list), self.case_pos.shape))
 
         self.frames_num = self.case_pos.shape[0]
         colors_R = np.linspace(0, 1, self.frames_num).reshape((self.frames_num, 1))
@@ -607,10 +606,19 @@ class TestNetwork():
                     for i in range(neighbour_slice):
                         frame_id = int(self.slice_ids[frame_index + i])
                         # print('frame_id {}'.format(frame_id))
-                        frame_path = path.join(self.case_frames_path, '{:04}.jpg'.format(frame_id))
-                        # frame_path = path.join(self.case_frames_path, '{:04}.jpg'.format(20))
-                        frame_img = cv2.imread(frame_path, 0)
-                        frame_img = data_transform(frame_img, masked_full=False)
+
+                        """ Load JPEG images seperately"""
+                        # frame_path = path.join(self.case_frames_path, '{:04}.jpg'.format(frame_id))
+                        # frame_img = cv2.imread(frame_path, 0)
+                        # frame_img = data_transform(frame_img, masked_full=False)
+
+                        """ Load npy cube images """
+                        frame_img = self.case_frames_npy[:, :, frame_id]
+                        frame_img = data_transform(frame_img, normalize=True)
+                        # print('cubeimage shape {}'.format(self.case_frames_npy.shape))
+                        # cv2.imshow('frame{:04}'.format(frame_id), frame_img)
+                        # cv2.waitKey(0)
+
                         # frame_img = data_transform(frame_img)
                         sample_slices.append(frame_img)
 
@@ -635,10 +643,10 @@ class TestNetwork():
                 #                           batch_ids=this_batch,
                 #                           batch_imgs=batch_imgs,
                 #                           maps=maps, weights=fc_weights)
+                # print('this_batch {}'.format(this_batch))
+                # print('maps shape {}'.format(maps.shape))
+                # print('fc_weights shape {}'.format(fc_weights.shape))
 
-                print('this_batch {}'.format(this_batch))
-                print('maps shape {}'.format(maps.shape))
-                print('fc_weights shape {}'.format(fc_weights.shape))
                 # print('input shape {}'.format(batch_imgs.shape))
                 # print('outputs shape {}'.format(outputs.shape))
                 outputs = outputs.data.cpu().numpy()
@@ -963,7 +971,8 @@ class TestNetwork():
             # plt.savefig('views/{}_img.jpg'.format(0))
             plt.savefig('views/all_cases/{}_{}.jpg'.format(model_string, case_id))
 
-            plt.title('Case{:04}'.format(self.case_id))
+            plt.title(self.case_name)
+            plt.savefig('results/plots/{}_vis.pdf'.format(self.case_name))
             plt.show()
 
         def get_gt_dofs():
@@ -1047,8 +1056,8 @@ class TestNetwork():
 
         self.gt_pts1 = tools.params2corner_pts(params=self.case_pos, cam_cali_mat=self.cam_cali_mat)
         self.trans_pts1 = tools.params2corner_pts(params=self.result_params, cam_cali_mat=self.cam_cali_mat)
-        np.save('results/trans_pts/{}_{:04}.npy'.format(model_string, self.case_id), self.trans_pts1)
-        np.save('results/trans_pts/GT_{:04}.npy'.format(self.case_id), self.gt_pts1)
+        np.save('results/trans_pts/{}_{}.npy'.format(model_string, self.case_name), self.trans_pts1)
+        np.save('results/trans_pts/GT_{}.npy'.format(self.case_name), self.gt_pts1)
 
         # time.sleep(30)
         self.trans_pts1_error = tools.evaluate_dist(pts1=self.gt_pts1, pts2=self.trans_pts1)
@@ -1056,9 +1065,9 @@ class TestNetwork():
         self.cor_coe = tools.evaluate_correlation(dof1=self.format_dofs, dof2=self.gt_dofs, abs=True)
         print('self.gt_pts1 shape {}'.format(self.gt_pts1.shape))
         print('self.trans_pts1 shape {}'.format(self.trans_pts1.shape))
-        print('Case{:04} error {:.4f}mm'.format(self.case_id, self.trans_pts1_error))
-        print('Case{:04} final drift {:.4f}mm'.format(self.case_id, self.final_drift))
-        print('Case{:04} correlation: {}'.format(self.case_id, self.cor_coe))
+        print('{} distance error {:.4f}mm'.format(self.case_name, self.trans_pts1_error))
+        print('{} final drift {:.4f}mm'.format(self.case_name, self.final_drift))
+        # print('Case{:04} correlation: {}'.format(self.case_id, self.cor_coe))
         print('*' * 50)
         visualize_sequences()
 #
@@ -1088,7 +1097,7 @@ if __name__ == '__main__':
     # print(fc_weights.shape)
 
     since = time.time()
-    case = TestNetwork(case_id=5)
+    case = TestNetwork(case_id='Demo')
     time_elapsed = time.time() - since
     print('One case testing complete in {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
 
