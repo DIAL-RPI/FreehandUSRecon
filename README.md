@@ -7,9 +7,22 @@ In this paper, we propose a deep contextual learning network (DCL-Net), which ca
 ## Environment
 - Set up your environment by anaconda, (**python3.7, torch 1.5.0+cu92**)
 
-### Testing
+## Testing
 One of our pretrained model is availabel in [GoogleDrive](https://drive.google.com/drive/folders/1fQTHekCs7et95x60WYEG7W5lRM8b4PGx?usp=sharing). After downloading it into the "pretrained_model" folder, run the following command to test with the demo case:
 ```
 CUDA_VISIBLE_DEVICES=0 python test_network.py
+```
+
+## Citation
+If you find this work helpful to you, please cite our paper in your work:
+```
+@inproceedings{guo2020sensorless,
+  title={Sensorless freehand 3D ultrasound reconstruction via deep contextual learning},
+  author={Guo, Hengtao and Xu, Sheng and Wood, Bradford and Yan, Pingkun},
+  booktitle={International Conference on Medical Image Computing and Computer-Assisted Intervention},
+  pages={463--472},
+  year={2020},
+  organization={Springer}
+}
 ```
 
